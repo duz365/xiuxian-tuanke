@@ -1,3 +1,5 @@
+// server/src/ai/AIService.ts
+
 export class AIService {
   private apiKey: string
   private baseURL: string
@@ -42,7 +44,7 @@ export class AIService {
       throw new Error(`硅基流动API错误 ${response.status}: ${errText}`)
     }
 
-    const data = await response.json()
+    const data: { choices: Array<{ message: { content: string } }> } = await response.json()
     const content = data.choices[0]?.message?.content || ''
     return content
   }
