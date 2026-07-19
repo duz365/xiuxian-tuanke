@@ -1,0 +1,24 @@
+:root {
+  --bg-dark: #1a1a2e;
+  --bg-panel: #16213e;
+  --bg-card: #0f3460;
+  --gold: #e2b04a;
+  --gold-light: #f0d78c;
+  --text: #e0d8c8;
+  --text-dim: #8a8a9a;
+  --hp-red: #e74c3c;
+  --mp-blue: #3498db;
+  --active-green: #2ecc71;
+  --hostile-red: #e74c3c;
+  --friendly-green: #27ae60;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
+}
+
+body {
+  background: var(--bg-dark);
+  color: var(--text);
+}
