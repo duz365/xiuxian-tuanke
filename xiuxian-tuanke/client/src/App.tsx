@@ -1,3 +1,5 @@
+// client/src/App.tsx
+
 import { useState, useEffect, useCallback } from 'react'
 import { socket } from './socket'
 import LoginScreen from './components/LoginScreen'
@@ -23,10 +25,18 @@ export default function App() {
   const [connected, setConnected] = useState(false)
 
   useEffect(() => {
-    socket.on('connect', () => setConnected(true))
-    socket.on('disconnect', () => setConnected(false))
+    socket.on('connect', () => {
+      console.log('Socket connected')
+      setConnected(true)
+    })
+
+    socket.on('disconnect', () => {
+      console.log('Socket disconnected')
+      setConnected(false)
+    })
 
     socket.on('PLAYER_JOINED', (data: { player: PlayerState; playerCount: number }) => {
+      console.log('PLAYER_JOINED:', data)
       setPlayers(prev => {
         if (prev.find(p => p.id === data.player.id)) return prev
         return [...prev, data.player]
@@ -34,11 +44,28 @@ export default function App() {
     })
 
     socket.on('SELF_INFO', (data: { playerId: string; handCards: string[]; stats: any; traitDescription: string }) => {
+      console.log('SELF_INFO received:', data)
       setHandCards(data.handCards)
-      setSelfInfo(prev => prev ? { ...prev, handCards: data.handCards, traitDescription: data.traitDescription } : null)
+      setSelfInfo(prev => {
+        console.log('Updating selfInfo, prev:', prev, 'playerId:', data.playerId)
+        return {
+          id: data.playerId,
+          name: prev?.name || '',
+          rootType: prev?.rootType || '金灵根',
+          stats: data.stats || prev?.stats || { spirit: 14, body: 16, mind: 10 },
+          hp: prev?.hp || 28,
+          maxHp: prev?.maxHp || 28,
+          mp: prev?.mp || 12,
+          maxMp: prev?.maxMp || 12,
+          trait: prev?.trait || '',
+          traitDescription: data.traitDescription || '',
+          handCards: data.handCards
+        }
+      })
     })
 
     socket.on('GAME_STARTED', (state: any) => {
+      console.log('GAME_STARTED:', state)
       setPlayers(state.players)
       setNPCs(state.activeNPCs || state.npcs || [])
       setCurrentTurn(state.currentTurn)
@@ -48,6 +75,7 @@ export default function App() {
     })
 
     socket.on('NARRATIVE', (data: { text: string; type: string; playerId?: string; cardId?: string; targetId?: string }) => {
+      console.log('NARRATIVE:', data)
       setLog(prev => [...prev, {
         text: data.text,
         type: data.type as GameLogEntry['type'],
@@ -58,6 +86,7 @@ export default function App() {
     })
 
     socket.on('PRIVATE_INFO', (data: { text: string; cardId: string }) => {
+      console.log('PRIVATE_INFO:', data)
       setLog(prev => [...prev, {
         text: `🔒 ${data.text}`,
         type: 'system',
@@ -66,21 +95,25 @@ export default function App() {
     })
 
     socket.on('STATE_UPDATE', (data: { changes: any[]; players: PlayerState[]; npcs: NPCState[]; currentNode?: any }) => {
+      console.log('STATE_UPDATE:', data)
       setPlayers(data.players)
       setNPCs(data.npcs)
       if (data.currentNode) setCurrentNode(data.currentNode)
     })
 
     socket.on('HAND_UPDATE', (data: { handCards: string[] }) => {
+      console.log('HAND_UPDATE:', data)
       setHandCards(data.handCards)
     })
 
     socket.on('TURN_CHANGE', (data: { currentTurn: string; turnOrder: string[] }) => {
+      console.log('TURN_CHANGE:', data, 'my id:', selfInfo?.id)
       setCurrentTurn(data.currentTurn)
       setTurnOrder(data.turnOrder)
     })
 
     socket.on('GAME_OVER', (data: { victory: boolean; message: string }) => {
+      console.log('GAME_OVER:', data)
       setGameOver(data)
     })
 
@@ -94,6 +127,7 @@ export default function App() {
     })
 
     socket.on('ERROR', (data: { message: string }) => {
+      console.error('Server error:', data.message)
       alert(`错误: ${data.message}`)
     })
 
@@ -118,41 +152,65 @@ export default function App() {
     try {
       const res = await fetch('/api/sessions', { method: 'POST' })
       const { sessionId: newSessionId } = await res.json()
+      console.log('Session created:', newSessionId)
       setSessionId(newSessionId)
+
       socket.connect()
       socket.emit('JOIN_SESSION', { sessionId: newSessionId, playerName })
-      setSelfInfo(prev => prev ? prev : {
-        id: '', name: playerName, rootType: '金灵根',
+
+      setSelfInfo({
+        id: '',  // 等 SELF_INFO 事件回来更新
+        name: playerName,
+        rootType: '金灵根',
         stats: { spirit: 14, body: 16, mind: 10 },
-        hp: 28, maxHp: 28, mp: 12, maxMp: 12,
-        trait: '', traitDescription: '',
+        hp: 28, maxHp: 28,
+        mp: 12, maxMp: 12,
+        trait: '',
+        traitDescription: '',
         handCards: []
       })
       setScreen('lobby')
     } catch (err) {
+      console.error('Create session failed:', err)
       alert('创建房间失败')
     }
   }, [])
 
   const handleJoinSession = useCallback(async (playerName: string, joinSessionId: string) => {
+    console.log('Joining session:', joinSessionId, 'as', playerName)
     setSessionId(joinSessionId)
+
     socket.connect()
     socket.emit('JOIN_SESSION', { sessionId: joinSessionId, playerName })
+
     setSelfInfo({
-      id: '', name: playerName, rootType: '金灵根',
+      id: '',
+      name: playerName,
+      rootType: '金灵根',
       stats: { spirit: 14, body: 16, mind: 10 },
-      hp: 28, maxHp: 28, mp: 12, maxMp: 12,
-      trait: '', traitDescription: '',
+      hp: 28, maxHp: 28,
+      mp: 12, maxMp: 12,
+      trait: '',
+      traitDescription: '',
       handCards: []
     })
     setScreen('lobby')
   }, [])
 
   const handleStartGame = useCallback(() => {
+    console.log('Starting game, sessionId:', sessionId)
     socket.emit('START_GAME', { sessionId })
   }, [sessionId])
 
   const handlePlayCard = useCallback((cardId: string, targetId: string, targetType: string, supplement?: string) => {
+    console.log('Playing card:', {
+      sessionId,
+      playerId: selfInfo?.id,
+      cardId,
+      targetId,
+      targetType,
+      supplement
+    })
     socket.emit('PLAY_CARD', {
       sessionId,
       playerId: selfInfo?.id,
