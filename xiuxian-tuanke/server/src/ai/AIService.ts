@@ -44,7 +44,9 @@ export class AIService {
       throw new Error(`硅基流动API错误 ${response.status}: ${errText}`)
     }
 
-    const data: { choices: Array<{ message: { content: string } }> } = await response.json()
+    const data = await response.json() as {
+      choices: Array<{ message: { content: string } }>
+    }
     const content = data.choices[0]?.message?.content || ''
     return content
   }
