@@ -1,248 +1,142 @@
-import { useState, useMemo } from 'react'
-import { PlayerState, SelfInfo, NPCState, GameLogEntry, ScriptNodeInfo, TargetOption, CardInfo } from '../types'
-import PlayerBar from './PlayerBar'
-import NarrativeLog from './NarrativeLog'
-import NPCList from './NPCList'
-import HandArea from './HandArea'
-import TargetSelector from './TargetSelector'
+import { useState, useMemo, useRef, useEffect } from 'react'
 
-interface Props {
-  sessionId: string
-  selfInfo: SelfInfo | null
-  players: PlayerState[]
-  npcs: NPCState[]
-  log: GameLogEntry[]
-  handCards: string[]
-  currentTurn: string
-  turnOrder: string[]
-  currentNode: ScriptNodeInfo | null
-  gameOver: { victory: boolean; message: string } | null
-  onPlayCard: (cardId: string, targetId: string, targetType: string, supplement?: string) => void
-}
-
-const CARD_DEFS: CardInfo[] = [
-  { id: 'sword-fly', name: '御剑术', type: 'attack', allowedTargets: ['enemy', 'npc'], consumable: false },
-  { id: 'qi-slash', name: '剑气斩', type: 'attack', allowedTargets: ['enemy'], consumable: false },
-  { id: 'water-dragon', name: '水龙吟', type: 'attack', allowedTargets: ['enemy', 'npc'], consumable: false },
-  { id: 'mountain-fist', name: '崩山拳', type: 'attack', allowedTargets: ['enemy'], consumable: false },
-  { id: 'ice-curse', name: '寒冰咒', type: 'attack', allowedTargets: ['enemy', 'npc'], consumable: false },
-  { id: 'gold-shield', name: '金盾诀', type: 'defense', allowedTargets: ['self', 'ally'], consumable: false },
-  { id: 'diamond-body', name: '金刚体', type: 'defense', allowedTargets: ['self'], consumable: false },
-  { id: 'spirit-rain', name: '灵雨术', type: 'heal', allowedTargets: ['self', 'ally'], consumable: false },
-  { id: 'spirit-eye', name: '灵目术', type: 'scout', allowedTargets: ['area', 'obstacle', 'npc'], consumable: false },
-  { id: 'qi-gaze', name: '望气术', type: 'scout', allowedTargets: ['area', 'npc'], consumable: false },
-  { id: 'earth-listen', name: '地听术', type: 'scout', allowedTargets: ['area'], consumable: false },
-  { id: 'earth-escape', name: '土遁术', type: 'movement', allowedTargets: ['obstacle'], consumable: false },
-  { id: 'wind-ride', name: '御风术', type: 'movement', allowedTargets: ['area'], consumable: false },
-  { id: 'spirit-pressure', name: '灵压外放', type: 'social', allowedTargets: ['npc'], consumable: false },
-  { id: 'soul-search', name: '搜魂术', type: 'social', allowedTargets: ['npc'], consumable: false },
-  { id: 'spirit-pill', name: '聚灵丹', type: 'special', allowedTargets: ['self', 'ally'], consumable: true },
-  { id: 'break-talisman', name: '破阵符', type: 'special', allowedTargets: ['obstacle', 'area'], consumable: true },
-  { id: 'help-talisman', name: '求救信符', type: 'special', allowedTargets: [], consumable: true },
-  { id: 'enlightenment', name: '顿悟', type: 'special', allowedTargets: ['self'], consumable: false },
-  { id: 'reinforce', name: '灵力共鸣', type: 'special', allowedTargets: ['ally'], consumable: false },
-  { id: 'transfer', name: '灵力渡让', type: 'special', allowedTargets: ['ally'], consumable: false },
-  { id: 'cover', name: '掩护', type: 'defense', allowedTargets: ['ally'], consumable: false }
+const CARD_DEFS: any[] = [
+  { id: 'sword-fly', name: '御剑术', type: 'skill', allowedTargets: ['enemy', 'npc'], consumable: false },
+  { id: 'qi-slash', name: '剑气斩', type: 'skill', allowedTargets: ['enemy'], consumable: false },
+  { id: 'water-dragon', name: '水龙吟', type: 'skill', allowedTargets: ['enemy', 'npc'], consumable: false },
+  { id: 'mountain-fist', name: '崩山拳', type: 'skill', allowedTargets: ['enemy'], consumable: false },
+  { id: 'ice-curse', name: '寒冰咒', type: 'skill', allowedTargets: ['enemy', 'npc'], consumable: false },
+  { id: 'healing-light', name: '治愈灵光', type: 'skill', allowedTargets: ['self', 'ally'], consumable: false },
+  { id: 'flame-blast', name: '烈焰掌', type: 'skill', allowedTargets: ['enemy', 'npc'], consumable: false },
+  { id: 'purple-sword', name: '紫电剑', type: 'equipment', allowedTargets: ['self'], consumable: false },
+  { id: 'iron-vest', name: '玄铁护甲', type: 'equipment', allowedTargets: ['self'], consumable: false },
+  { id: 'spirit-jade', name: '灵玉坠', type: 'equipment', allowedTargets: ['self'], consumable: false },
+  { id: 'flame-gloves', name: '烈焰拳套', type: 'equipment', allowedTargets: ['self'], consumable: false },
+  { id: 'cloud-boots', name: '踏云靴', type: 'equipment', allowedTargets: ['self'], consumable: false },
+  { id: 'full-strike', name: '全力一击', type: 'action', allowedTargets: ['enemy', 'npc'], consumable: false },
+  { id: 'defend-stance', name: '防御姿态', type: 'action', allowedTargets: ['self'], consumable: false },
+  { id: 'search-area', name: '仔细搜索', type: 'action', allowedTargets: ['area'], consumable: false },
+  { id: 'meditate', name: '打坐冥想', type: 'action', allowedTargets: ['self'], consumable: false },
+  { id: 'spirit-eye', name: '灵目术', type: 'action', allowedTargets: ['area', 'obstacle', 'npc'], consumable: false },
+  { id: 'spirit-pill', name: '聚灵丹', type: 'item', allowedTargets: ['self', 'ally'], consumable: true },
+  { id: 'hp-pill', name: '回春丹', type: 'item', allowedTargets: ['self', 'ally'], consumable: true },
+  { id: 'spirit-herb', name: '灵草', type: 'item', allowedTargets: [], consumable: false },
+  { id: 'break-talisman', name: '破阵符', type: 'item', allowedTargets: ['obstacle', 'area'], consumable: true },
+  { id: 'enlightenment-tea', name: '悟道茶', type: 'item', allowedTargets: ['self'], consumable: true }
 ]
 
-export default function GameTable({
-  selfInfo, players, npcs, log, handCards, currentTurn, turnOrder,
-  currentNode, gameOver, onPlayCard
-}: Props) {
-  const [selectedCardId, setSelectedCardId] = useState<string | null>(null)
-  const [supplement, setSupplement] = useState('')
+const TYPE_LABEL: Record<string, string> = { skill: '技能', equipment: '装备', action: '行动', item: '物品' }
 
+export default function GameTable({ selfInfo, players, npcs, log, handCards, currentTurn, turnOrder, currentNode, gameOver, onPlayCard, spiritStones, equipment }: any) {
+  const [selectedCard, setSelectedCard] = useState<string | null>(null)
+  const [supplement, setSupplement] = useState('')
+  const bottomRef = useRef<HTMLDivElement>(null)
   const isMyTurn = selfInfo?.id === currentTurn
 
-  const selectedCard = useMemo(() => {
-    if (!selectedCardId) return null
-    return CARD_DEFS.find(c => c.id === selectedCardId) || null
-  }, [selectedCardId])
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [log])
 
-  const getAvailableTargets = (): TargetOption[] => {
-    if (!selectedCard || !selfInfo) return []
+  const cardInfo = useMemo(() => selectedCard ? CARD_DEFS.find(c => c.id === selectedCard) : null, [selectedCard])
 
-    const targets: TargetOption[] = []
+  const targets = useMemo(() => {
+    if (!cardInfo || !selfInfo) return []
+    const t: any[] = []
+    if (cardInfo.allowedTargets.includes('self')) t.push({ id: selfInfo.id, label: `自己 (${selfInfo.name})`, type: 'self' })
+    if (cardInfo.allowedTargets.includes('ally')) players.filter((p: any) => p.id !== selfInfo.id && p.hp > 0).forEach((p: any) => t.push({ id: p.id, label: `${p.name} [HP:${p.hp}]`, type: 'ally' }))
+    if (cardInfo.allowedTargets.includes('enemy') || cardInfo.allowedTargets.includes('npc')) npcs.filter((n: any) => n.hp > 0).forEach((n: any) => t.push({ id: n.id, label: `${n.name} [HP:${n.hp}]`, type: n.faction === 'hostile' ? 'enemy' : 'npc' }))
+    if (cardInfo.allowedTargets.includes('area')) t.push({ id: 'current', label: `当前场景: ${currentNode?.name || '???'}`, type: 'area' })
+    if (cardInfo.allowedTargets.includes('obstacle')) { t.push({ id: 'bridge', label: '铁索桥', type: 'obstacle' }); t.push({ id: 'gate', label: '石门禁制', type: 'obstacle' }) }
+    return t
+  }, [cardInfo, selfInfo, players, npcs, currentNode])
 
-    if (selectedCard.allowedTargets.includes('self')) {
-      targets.push({ id: selfInfo.id, label: `自己（${selfInfo.name}）`, type: 'self' })
-    }
-
-    if (selectedCard.allowedTargets.includes('ally')) {
-      players
-        .filter(p => p.id !== selfInfo.id && p.hp > 0)
-        .forEach(p => targets.push({
-          id: p.id,
-          label: `${p.name}（${p.rootType} · HP ${p.hp}/${p.maxHp}）`,
-          type: 'ally'
-        }))
-    }
-
-    if (selectedCard.allowedTargets.includes('enemy') || selectedCard.allowedTargets.includes('npc')) {
-      npcs
-        .filter(n => n.hp > 0)
-        .forEach(n => targets.push({
-          id: n.id,
-          label: `${n.faction === 'hostile' ? '⚔️ ' : ''}${n.name}（HP ${n.hp}/${n.maxHp}）`,
-          type: n.faction === 'hostile' ? 'enemy' : 'npc'
-        }))
-    }
-
-    if (selectedCard.allowedTargets.includes('area')) {
-      targets.push({ id: 'current', label: `当前场景：${currentNode?.name || '未知'}`, type: 'area' })
-    }
-
-    if (selectedCard.allowedTargets.includes('obstacle')) {
-      targets.push(
-        { id: 'bridge', label: '铁索桥', type: 'obstacle' },
-        { id: 'gate', label: '石门禁制', type: 'obstacle' },
-        { id: 'swamp', label: '毒瘴', type: 'obstacle' }
-      )
-    }
-
-    return targets
-  }
-
-  const handleCardClick = (cardId: string) => {
-    if (!isMyTurn) return
-    setSelectedCardId(prev => prev === cardId ? null : cardId)
-  }
-
-  const handleTargetSelect = (target: TargetOption) => {
-    if (!selectedCardId) return
-    onPlayCard(selectedCardId, target.id, target.type, supplement || undefined)
-    setSelectedCardId(null)
-    setSupplement('')
-  }
+  const handleCardClick = (id: string) => { if (!isMyTurn) return; setSelectedCard(prev => prev === id ? null : id) }
+  const handleTarget = (t: any) => { if (!selectedCard) return; onPlayCard(selectedCard, t.id, t.type, supplement || undefined); setSelectedCard(null); setSupplement('') }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* 场景信息 */}
-      {currentNode && (
-        <div style={{
-          padding: '8px 16px', background: '#0d1b2a',
-          borderBottom: '1px solid #1b2838',
-          display: 'flex', justifyContent: 'space-between',
-          alignItems: 'center', fontSize: '0.85em'
-        }}>
-          <span>
-            📍 <strong style={{ color: '#e2b04a' }}>{currentNode.name}</strong>
-            <span style={{ color: '#8a8a9a', marginLeft: '8px' }}>{currentNode.description.slice(0, 40)}...</span>
-          </span>
-          <span style={{ color: '#8a8a9a' }}>
-            回合顺序：{turnOrder.map(id => {
-              const p = players.find(pp => pp.id === id)
-              return p ? (id === currentTurn ? `▶${p.name}` : p.name) : '?'
-            }).join(' → ')}
-          </span>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0a0a0a' }}>
+      {/* 顶部状态 */}
+      <div style={{ padding: '4px 12px', borderBottom: '1px solid #1a1a1a', display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#555' }}>
+        <span>[{currentNode?.name || '???'}]</span>
+        <span style={{ color: '#666' }}>灵石: {spiritStones} | 武器: {equipment?.weapon ? CARD_DEFS.find((c: any) => c.id === equipment.weapon)?.name || '?' : '无'} | 护甲: {equipment?.armor ? CARD_DEFS.find((c: any) => c.id === equipment.armor)?.name || '?' : '无'}</span>
+        <span>{turnOrder.map((id: string) => { const p = players.find((pp: any) => pp.id === id); return p ? (id === currentTurn ? `[>${p.name}]` : p.name) : '?' }).join(' → ')}</span>
+      </div>
+
+      {/* 玩家行 */}
+      <div style={{ display: 'flex', gap: '1px', padding: '2px 12px', borderBottom: '1px solid #1a1a1a', fontSize: '12px' }}>
+        {players.map((p: any) => (
+          <div key={p.id} style={{ padding: '4px 10px', background: p.id === currentTurn ? '#111' : '#0a0a0a', border: p.id === currentTurn ? '1px solid #444' : '1px solid #1a1a1a', opacity: p.hp <= 0 ? 0.5 : 1, minWidth: '110px' }}>
+            <div style={{ color: p.id === currentTurn ? '#bbb' : '#777' }}>{p.id === currentTurn ? '> ' : '  '}{p.name}{p.id === selfInfo?.id ? ' [你]' : ''}{p.hp <= 0 ? ' [阵亡]' : ''}</div>
+            <div style={{ color: '#555' }}>HP:{p.hp}/{p.maxHp} MP:{p.mp}/{p.maxMp} 盾:{p.shield||0}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* 叙事区 */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px', lineHeight: 1.7, fontSize: '13px' }}>
+        {log.map((entry: any, i: number) => (
+          <div key={i} style={{ marginBottom: '4px', color: entry.type === 'dm' ? '#888' : entry.type === 'card' ? '#777' : entry.type === 'loot' ? '#999' : '#555', borderLeft: entry.type === 'dm' ? '2px solid #2a2a2a' : entry.type === 'card' ? '2px solid #1a1a1a' : 'none', paddingLeft: entry.type === 'dm' || entry.type === 'card' ? '8px' : '0' }}>
+            {entry.text}
+          </div>
+        ))}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* NPC行 */}
+      {npcs.length > 0 && (
+        <div style={{ padding: '6px 12px', borderTop: '1px solid #1a1a1a', borderBottom: '1px solid #1a1a1a', display: 'flex', gap: '6px', flexWrap: 'wrap', fontSize: '12px' }}>
+          <span style={{ color: '#555' }}>敌人:</span>
+          {npcs.map((n: any) => (
+            <button key={n.id} onClick={() => { if (cardInfo && isMyTurn) handleTarget({ id: n.id, label: n.name, type: n.faction === 'hostile' ? 'enemy' : 'npc' }) }} disabled={n.hp <= 0} style={{ padding: '3px 8px', background: '#0a0a0a', border: '1px solid #1a1a1a', color: n.hp <= 0 ? '#333' : '#888', fontSize: '11px', opacity: n.hp <= 0 ? 0.5 : 1 }}>
+              {n.name} [{n.hp}/{n.maxHp}]
+            </button>
+          ))}
         </div>
       )}
 
-      {/* 玩家状态栏 */}
-      <PlayerBar players={players} currentTurn={currentTurn} selfId={selfInfo?.id || ''} />
-
-      {/* 主体区域 */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        {/* 叙事日志 */}
-        <NarrativeLog log={log} />
-
-        {/* NPC列表 */}
-        <NPCList
-          npcs={npcs}
-          onSelect={(npc) => {
-            if (!selectedCard || !isMyTurn) return
-            const targetType = npc.faction === 'hostile' ? 'enemy' : 'npc'
-            onPlayCard(selectedCardId!, npc.id, targetType, supplement || undefined)
-            setSelectedCardId(null)
-            setSupplement('')
-          }}
-        />
-
-        {/* 补充输入框 */}
-        {selectedCard && isMyTurn && (
-          <div style={{ padding: '4px 12px', display: 'flex', gap: '8px' }}>
-            <input
-              type="text"
-              placeholder="补充描述（可选，限20字）"
-              value={supplement}
-              onChange={e => setSupplement(e.target.value.slice(0, 20))}
-              style={{
-                flex: 1, padding: '6px 10px',
-                background: '#16213e', color: '#e0d8c8',
-                border: '1px solid #555', borderRadius: '4px',
-                outline: 'none', fontSize: '0.85em'
-              }}
-            />
-            <button
-              onClick={() => {
-                setSelectedCardId(null)
-                setSupplement('')
-              }}
-              style={{
-                padding: '6px 14px',
-                background: 'transparent', border: '1px solid #555',
-                color: '#8a8a9a', cursor: 'pointer', borderRadius: '4px'
-              }}
-            >
-              取消
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* 手牌区 */}
-      <HandArea
-        handCards={handCards}
-        cardDefs={CARD_DEFS}
-        selectedCardId={selectedCardId}
-        onSelectCard={handleCardClick}
-        isMyTurn={isMyTurn}
-      />
-
-      {/* 目标选择器弹窗 */}
+      {/* 补充输入 */}
       {selectedCard && isMyTurn && (
-        <TargetSelector
-          targets={getAvailableTargets()}
-          onSelect={handleTargetSelect}
-          onCancel={() => { setSelectedCardId(null); setSupplement('') }}
-          cardName={selectedCard.name}
-        />
+        <div style={{ padding: '4px 12px', display: 'flex', gap: '6px' }}>
+          <input placeholder="补充描述(可选,限20字)" value={supplement} onChange={e => setSupplement(e.target.value.slice(0, 20))} style={{ flex: 1, fontSize: '12px' }} />
+          <button onClick={() => { setSelectedCard(null); setSupplement('') }} style={{ fontSize: '11px', color: '#555' }}>取消</button>
+        </div>
       )}
 
-      {/* 游戏结束弹窗 */}
+      {/* 目标选择 */}
+      {selectedCard && cardInfo && isMyTurn && targets.length > 0 && (
+        <div style={{ padding: '6px 12px', borderTop: '1px solid #1a1a1a', fontSize: '12px' }}>
+          <div style={{ color: '#666', marginBottom: '4px' }}>对谁使用 [{cardInfo.name}]？</div>
+          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+            {targets.map((t: any) => (
+              <button key={t.id} onClick={() => handleTarget(t)} style={{ padding: '4px 10px', background: '#0a0a0a', border: '1px solid #1a1a1a', color: '#888', fontSize: '11px' }}>{t.label}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 手牌区 */}
+      <div style={{ padding: '8px 12px', borderTop: '1px solid #1a1a1a', background: '#080808' }}>
+        <div style={{ color: '#555', fontSize: '11px', marginBottom: '4px' }}>{isMyTurn ? '> 你的回合 — 选择卡牌：' : '  等待回合...'}</div>
+        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+          {handCards.map((cid: string) => {
+            const info = CARD_DEFS.find(c => c.id === cid)
+            const sel = selectedCard === cid
+            return (
+              <button key={cid} onClick={() => handleCardClick(cid)} disabled={!isMyTurn} style={{ padding: '6px 10px', background: sel ? '#1a1a1a' : '#0a0a0a', border: sel ? '1px solid #555' : '1px solid #1a1a1a', color: sel ? '#bbb' : '#888', fontSize: '12px', textAlign: 'left', minWidth: '80px', opacity: isMyTurn ? 1 : 0.5 }}>
+                <div>{info?.name || cid}</div>
+                {info && <div style={{ fontSize: '10px', color: '#555' }}>[{TYPE_LABEL[info.type] || info.type}]{info.consumable ? ' [消耗]' : ''}</div>}
+              </button>
+            )
+          })}
+          {handCards.length === 0 && <span style={{ color: '#333', fontSize: '12px' }}>— 无手牌 —</span>}
+        </div>
+      </div>
+
+      {/* 游戏结束 */}
       {gameOver && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.85)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 200
-        }}>
-          <div style={{
-            background: '#16213e', borderRadius: '16px',
-            padding: '40px', textAlign: 'center',
-            border: `3px solid ${gameOver.victory ? '#e2b04a' : '#e74c3c'}`,
-            maxWidth: '500px'
-          }}>
-            <h2 style={{
-              color: gameOver.victory ? '#e2b04a' : '#e74c3c',
-              fontSize: '2em', marginBottom: '16px'
-            }}>
-              {gameOver.victory ? '🏆 冒险成功！' : '💀 冒险失败'}
-            </h2>
-            <p style={{ color: '#e0d8c8', fontSize: '1.1em', lineHeight: '1.6' }}>
-              {gameOver.message}
-            </p>
-            <button
-              onClick={() => window.location.reload()}
-              style={{
-                marginTop: '24px', padding: '10px 32px',
-                background: '#e2b04a', color: '#1a1a2e',
-                border: 'none', borderRadius: '6px',
-                fontWeight: 'bold', cursor: 'pointer', fontSize: '1em'
-              }}
-            >
-              再来一局
-            </button>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+          <div style={{ background: '#0a0a0a', border: '1px solid #333', padding: '36px 44px', textAlign: 'center', maxWidth: '400px' }}>
+            <div style={{ color: '#999', fontSize: '18px', marginBottom: '14px', letterSpacing: '3px' }}>{gameOver.victory ? '[ 冒 险 成 功 ]' : '[ 全 员 阵 亡 ]'}</div>
+            <div style={{ color: '#777', lineHeight: 1.7 }}>{gameOver.message}</div>
+            <button onClick={() => window.location.reload()} style={{ marginTop: '22px', padding: '8px 24px', border: '1px solid #555', color: '#999', letterSpacing: '2px' }}>再来一局</button>
           </div>
         </div>
       )}
