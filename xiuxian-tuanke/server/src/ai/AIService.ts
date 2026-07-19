@@ -1,5 +1,3 @@
-// server/src/ai/AIService.ts
-
 export class AIService {
   private apiKey: string
   private baseURL: string
@@ -8,7 +6,7 @@ export class AIService {
   constructor() {
     this.apiKey = process.env.SILICONFLOW_API_KEY || ''
     this.baseURL = 'https://api.siliconflow.cn/v1'
-    this.defaultModel = process.env.AI_MODEL || 'Qwen/Qwen2.5-7B-Instruct'
+    this.defaultModel = process.env.AI_MODEL || 'deepseek-ai/DeepSeek-V2.5'
   }
 
   async generate(
@@ -21,33 +19,37 @@ export class AIService {
       model?: string
     } = {}
   ): Promise<string> {
+    const body: any = {
+      model: options.model || this.defaultModel,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      max_tokens: options.maxTokens || 500,
+      temperature: options.temperature ?? 0.8
+    }
+
+    if (options.requireJSON) {
+      body.response_format = { type: 'json_object' }
+    }
+
     const response = await fetch(`${this.baseURL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.apiKey}`
       },
-      body: JSON.stringify({
-        model: options.model || this.defaultModel,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        max_tokens: options.maxTokens || 400,
-        temperature: options.temperature ?? 0.7,
-        ...(options.requireJSON ? { response_format: { type: 'json_object' } } : {})
-      })
+      body: JSON.stringify(body)
     })
 
     if (!response.ok) {
       const errText = await response.text()
-      throw new Error(`硅基流动API错误 ${response.status}: ${errText}`)
+      throw new Error(`AI API错误 ${response.status}: ${errText}`)
     }
 
     const data = await response.json() as {
       choices: Array<{ message: { content: string } }>
     }
-    const content = data.choices[0]?.message?.content || ''
-    return content
+    return data.choices[0]?.message?.content || ''
   }
 }
